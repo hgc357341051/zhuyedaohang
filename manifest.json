@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "书签WebDAV备份",
-  "version": "1.0.0",
-  "description": "将浏览器书签备份到WebDAV，支持加密存储和双向同步",
+  "name": "云启 · 新标签页",
+  "version": "2.0.0",
+  "description": "个性化新标签页：时钟、搜索、快捷链接、备忘笔记、书签，支持组件外观自定义与WebDAV云同步",
   "permissions": [
     "bookmarks",
     "storage",
@@ -42,7 +42,7 @@
   ],
   "browser_specific_settings": {
     "gecko": {
-      "id": "bookmark-webdav-backup@example.com",
+      "id": "cloud-start-newtab@example.com",
       "strict_min_version": "109.0"
     }
   }

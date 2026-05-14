@@ -78,16 +78,20 @@ class LinksComponent {
       this.grid.appendChild(item);
     });
 
-    // 添加"新增链接"占位卡片
-    const addItem = document.createElement('div');
-    addItem.className = 'link-item link-item-add';
-    addItem.innerHTML = `
-      <div class="link-icon">+</div>
-      <div class="link-title">添加</div>
-    `;
-    // 点击添加新链接
-    addItem.addEventListener('click', () => this._showAddModal());
-    this.grid.appendChild(addItem);
+    // 读取showAddCard配置，默认true显示
+    const showAddCard = this.config.components?.style?.links?.showAddCard !== false;
+    // 添加"新增链接"占位卡片（根据配置决定是否显示）
+    if (showAddCard) {
+      const addItem = document.createElement('div');
+      addItem.className = 'link-item link-item-add';
+      addItem.innerHTML = `
+        <div class="link-icon">+</div>
+        <div class="link-title">添加</div>
+      `;
+      // 点击添加新链接
+      addItem.addEventListener('click', () => this._showAddModal());
+      this.grid.appendChild(addItem);
+    }
   }
 
   /**
@@ -263,11 +267,11 @@ class LinksComponent {
       <div class="modal-title">添加快捷链接</div>
       <div class="modal-field">
         <label>标题</label>
-        <input type="text" id="link-title-input" placeholder="例如：GitHub">
+        <textarea id="link-title-input" rows="2" placeholder="例如：GitHub"></textarea>
       </div>
       <div class="modal-field">
         <label>网址</label>
-        <input type="url" id="link-url-input" placeholder="https://github.com">
+        <textarea id="link-url-input" rows="2" placeholder="https://github.com"></textarea>
       </div>
       <div class="modal-field">
         <label>图标URL（可选）</label>

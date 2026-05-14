@@ -90,7 +90,7 @@ html, body {
   max-width: 900px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 10px;
 }
 
 /* ========== 组件容器基础样式 ========== */
@@ -102,7 +102,6 @@ html, body {
   border: none;
   border-radius: 0; /* 无圆角 */
   box-shadow: none;
-  padding: 24px;
   transition: none; /* 无过渡动画 */
 }
 
@@ -844,11 +843,6 @@ html, body {
   border-radius: 2px;
 }
 
-/* ========== 书签组件 ========== */
-.bookmarks-component {
-  padding: 20px 24px;
-}
-
 .bookmarks-header {
   display: flex;
   justify-content: space-between;
@@ -882,6 +876,35 @@ html, body {
 .bookmarks-toolbar button:hover {
   background: rgba(255, 255, 255, 0.2);
   color: var(--text-primary);
+}
+
+/* 书签搜索栏 */
+.bookmarks-search-bar {
+  margin-bottom: 8px;
+}
+.bookmarks-search-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--comp-text-primary, var(--text-primary));
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+.bookmarks-search-input:focus {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.bookmarks-search-input::placeholder {
+  color: var(--comp-text-muted, var(--text-muted));
+}
+.bookmarks-search-empty {
+  text-align: center;
+  padding: 20px 0;
+  font-size: 13px;
+  color: var(--comp-text-muted, var(--text-muted));
 }
 
 /* 书签树容器 */
@@ -1359,7 +1382,7 @@ html, body {
   border: 1px solid var(--glass-border);
   border-radius: 20px;
   padding: 28px;
-  width: 380px;
+  width: 460px;
   max-width: 90vw;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
   transform: scale(0.95);
@@ -1389,7 +1412,8 @@ html, body {
 }
 
 .modal-field input,
-.modal-field select {
+.modal-field select,
+.modal-field textarea {
   width: 100%;
   background: var(--input-bg);
   border: 1px solid var(--input-border);
@@ -1399,10 +1423,18 @@ html, body {
   font-size: 14px;
   outline: none;
   transition: border-color var(--transition);
+  box-sizing: border-box;
+}
+
+.modal-field textarea {
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.4;
 }
 
 .modal-field input:focus,
-.modal-field select:focus {
+.modal-field select:focus,
+.modal-field textarea:focus {
   border-color: var(--input-focus);
 }
 

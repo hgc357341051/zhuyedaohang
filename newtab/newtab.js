@@ -29,9 +29,9 @@
       style: {
         clock: { cardBgColor: '#ffffff', opacity: 0, textColor: '#ffffff', fontSize: 14, fontWeight: 400, titleFontSize: 16, titleFontWeight: 600, borderRadius: 12, padding: 20, clockFontSize: 72, clockFontWeight: 200 },
         search: { cardBgColor: '#ffffff', opacity: 0, textColor: '#ffffff', fontSize: 14, fontWeight: 400, titleFontSize: 16, titleFontWeight: 600, borderRadius: 12, padding: 20, dropdownBgColor: '#1e2032', dropdownTextColor: '#ffffff' },
-        links: { cardBgColor: '#ffffff', opacity: 0, textColor: '#ffffff', fontSize: 11, fontWeight: 400, titleFontSize: 16, titleFontWeight: 600, borderRadius: 12, padding: 20 },
+        links: { cardBgColor: '#ffffff', opacity: 0, textColor: '#ffffff', fontSize: 11, fontWeight: 400, titleFontSize: 16, titleFontWeight: 600, borderRadius: 12, padding: 20, showAddCard: true },
         notes: { cardBgColor: '#ffffff', opacity: 0, textColor: '#ffffff', fontSize: 14, fontWeight: 400, titleFontSize: 16, titleFontWeight: 600, borderRadius: 12, padding: 20 },
-        bookmarks: { cardBgColor: '#ffffff', opacity: 0, textColor: '#ffffff', fontSize: 14, fontWeight: 400, titleFontSize: 16, titleFontWeight: 600, borderRadius: 12, padding: 20 }
+        bookmarks: { cardBgColor: '#ffffff', opacity: 0, textColor: '#ffffff', fontSize: 14, fontWeight: 400, titleFontSize: 16, titleFontWeight: 600, borderRadius: 12, padding: 20, showSearch: true }
       }
     },
     // 搜索配置
@@ -78,6 +78,7 @@
   window.NewTabApp = {
     saveConfig,
     renderComponents,
+    reloadComponent,
     showToast,
     showConfirm,
     applyComponentStyle,
@@ -324,7 +325,8 @@
     const componentDefaults = {
       clock: { fontSize: 14, clockFontSize: 72, clockFontWeight: 200 },
       search: { fontSize: 14, dropdownBgColor: '#1e2032', dropdownTextColor: '#ffffff' },
-      links: { fontSize: 11 }
+      links: { fontSize: 11, showAddCard: true },
+      bookmarks: { fontSize: 14, showSearch: true }
     };
     return { ...base, ...(componentDefaults[componentKey] || {}) };
   }
@@ -364,8 +366,6 @@
       // 根据透明度动态计算边框和输入框的透明度
       const borderOpacity = Math.min(opacity + 0.07, 0.35);
       const borderHoverOpacity = Math.min(opacity + 0.15, 0.5);
-      const inputBgOpacity = Math.min(opacity + 0.02, 0.2);
-      const inputBorderOpacity = Math.min(opacity + 0.1, 0.3);
 
       // 计算卡片背景的亮度
       const bgBrightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
@@ -532,6 +532,68 @@
       // 隐藏操作按钮：添加隐藏类
       document.body.classList.add('hide-actions');
     }
+  }
+
+  /**
+   * 重新渲染指定组件（保留其他组件不动）
+   * 用于功能性配置变更后需要重新构建DOM的场景
+   * @param {string} componentKey - 组件键名（如 'links'）
+   */
+  function reloadComponent(componentKey) {
+    const grid = document.getElementById('components-grid');
+    const CompClass = COMPONENT_CLASSES[componentKey];
+    if (!CompClass || !grid) return;
+
+    // 销毁旧实例
+    if (components[componentKey] && typeof components[componentKey].destroy === 'function') {
+      components[componentKey].destroy();
+    }
+
+    // 移除旧DOM
+    const oldWrapper = grid.querySelector(`[data-component="${componentKey}"]`);
+    if (oldWrapper) {
+      oldWrapper.remove();
+    }
+
+    // 创建新实例
+    const instance = new CompClass(config);
+    const fragment = document.createDocumentFragment();
+    instance.render(fragment);
+
+    // 找到正确的插入位置（按组件排序顺序）
+    const order = config.components?.order || DEFAULT_CONFIG.components.order;
+    const enabled = config.components?.enabled || DEFAULT_CONFIG.components.enabled;
+    let insertBefore = null;
+    let foundSelf = false;
+
+    for (const key of order) {
+      if (key === componentKey) {
+        foundSelf = true;
+        continue;
+      }
+      // 找到当前组件之后、第一个已启用且存在的组件
+      if (foundSelf && enabled[key]) {
+        insertBefore = grid.querySelector(`[data-component="${key}"]`);
+        break;
+      }
+    }
+
+    // 插入到正确位置
+    if (insertBefore) {
+      grid.insertBefore(fragment, insertBefore);
+    } else {
+      grid.appendChild(fragment);
+    }
+
+    // 保存新实例并应用样式
+    components[componentKey] = instance;
+    const newWrapper = grid.querySelector(`[data-component="${componentKey}"]`);
+    if (newWrapper) {
+      applyComponentStyle(newWrapper, componentKey);
+    }
+
+    // 应用操作按钮可见性
+    applyActionsVisibility();
   }
 
   /**

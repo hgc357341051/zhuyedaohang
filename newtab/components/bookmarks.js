@@ -1,7 +1,7 @@
 /**
  * 书签管理组件
  * 显示浏览器书签树，支持展开/折叠、打开、编辑、删除
- * 优化设计：隐藏系统文件夹名称（收藏夹栏等），直接展示书签内容
+ * 支持搜索过滤快速定位书签
  */
 class BookmarksComponent {
   /**
@@ -11,6 +11,11 @@ class BookmarksComponent {
   constructor(config) {
     this.config = config;
     this.el = null;
+    this.tree = null; // 书签树容器
+    this.searchInput = null; // 搜索输入框
+    this._searchKeyword = ''; // 当前搜索关键词
+    this._searchTimer = null; // 搜索防抖定时器
+    this._bookmarkData = null; // 缓存原始书签数据，搜索时复用
   }
 
   /**
@@ -52,12 +57,31 @@ class BookmarksComponent {
     header.appendChild(title);
     header.appendChild(toolbar);
 
+    // 搜索栏（根据配置决定是否显示）
+    const showSearch = this.config.components?.style?.bookmarks?.showSearch !== false;
+    if (showSearch) {
+      const searchBar = document.createElement('div');
+      searchBar.className = 'bookmarks-search-bar';
+
+      const searchInput = document.createElement('input');
+      searchInput.type = 'text';
+      searchInput.className = 'bookmarks-search-input';
+      searchInput.placeholder = '搜索书签...';
+      // 搜索防抖：300ms延迟，避免频繁过滤
+      searchInput.addEventListener('input', () => this._handleSearch());
+
+      searchBar.appendChild(searchInput);
+      card.appendChild(header);
+      card.appendChild(searchBar);
+    } else {
+      card.appendChild(header);
+    }
+
     // 书签树容器
     const tree = document.createElement('div');
     tree.className = 'bookmarks-tree';
     tree.id = 'bookmarks-tree';
 
-    card.appendChild(header);
     card.appendChild(tree);
     wrapper.appendChild(card);
     container.appendChild(wrapper);
@@ -65,80 +89,151 @@ class BookmarksComponent {
     // 保存引用
     this.el = wrapper;
     this.tree = tree;
+    this.searchInput = wrapper.querySelector('.bookmarks-search-input');
 
     // 延迟加载书签数据：使用requestIdleCallback在浏览器空闲时加载
-    // 避免阻塞首屏渲染，提升页面打开速度
     if (typeof requestIdleCallback === 'function') {
-      // 浏览器支持requestIdleCallback，在空闲时加载
       requestIdleCallback(() => this._loadBookmarks(), { timeout: 1000 });
     } else {
-      // 不支持时使用setTimeout延迟100ms加载
       setTimeout(() => this._loadBookmarks(), 100);
     }
   }
 
   /**
-   * 从浏览器加载书签树
-   * 使用DocumentFragment批量插入DOM，减少重排次数
-   * 优化：跳过系统根文件夹（收藏夹栏、其他书签等），直接展示内容
+   * 搜索输入处理（300ms防抖）
+   * @private
+   */
+  _handleSearch() {
+    // 清除上一次的防抖定时器
+    if (this._searchTimer) clearTimeout(this._searchTimer);
+    // 设置新的防抖定时器
+    this._searchTimer = setTimeout(() => {
+      // 获取搜索关键词并转小写
+      this._searchKeyword = (this.searchInput?.value || '').trim().toLowerCase();
+      // 重新渲染书签树
+      this._renderTree();
+    }, 300);
+  }
+
+  /**
+   * 从浏览器加载书签数据（仅加载，不渲染）
    * @private
    */
   async _loadBookmarks() {
     try {
       // 获取完整书签树
       const bookmarkTree = await chrome.bookmarks.getTree();
-
-      // 使用DocumentFragment批量构建DOM，避免多次重排
-      const fragment = document.createDocumentFragment();
-
-      // 根节点通常有"书签栏"和"其他书签"两个子节点
-      const root = bookmarkTree[0];
-      if (root.children) {
-        root.children.forEach(child => {
-          // 跳过空文件夹
-          if (child.children && child.children.length > 0) {
-            // 判断是否为系统根文件夹（收藏夹栏、其他书签等）
-            // 系统根文件夹的id通常为"1"（书签栏）或"2"（其他书签）
-            const isSystemFolder = child.id === '1' || child.id === '2' || child.id === '0';
-
-            if (isSystemFolder && child.children) {
-              // 系统根文件夹：不显示文件夹名称，直接展开其内容
-              child.children.forEach(subChild => {
-                if (subChild.url) {
-                  // 直接是书签项
-                  const item = this._renderBookmark(subChild);
-                  fragment.appendChild(item);
-                } else if (subChild.children && subChild.children.length > 0) {
-                  // 子文件夹：正常渲染（显示文件夹名称）
-                  const folderEl = this._renderFolder(subChild, 0);
-                  fragment.appendChild(folderEl);
-                }
-              });
-            } else {
-              // 非系统文件夹：正常渲染（显示文件夹名称）
-              const folderEl = this._renderFolder(child, 0);
-              fragment.appendChild(folderEl);
-            }
-          }
-        });
-      }
-
-      // 一次性清空并插入，只触发一次重排
-      this.tree.innerHTML = '';
-      this.tree.appendChild(fragment);
+      // 缓存原始数据
+      this._bookmarkData = bookmarkTree[0];
+      // 渲染树
+      this._renderTree();
     } catch (error) {
       this.tree.innerHTML = `<div style="color:var(--danger);padding:12px;">加载书签失败: ${error.message}</div>`;
     }
   }
 
   /**
+   * 渲染书签树（根据搜索关键词过滤）
+   * @private
+   */
+  _renderTree() {
+    const root = this._bookmarkData;
+    if (!root) return;
+
+    // 使用DocumentFragment批量构建DOM
+    const fragment = document.createDocumentFragment();
+
+    if (root.children) {
+      root.children.forEach(child => {
+        // 跳过空文件夹
+        if (child.children && child.children.length > 0) {
+          const isSystemFolder = child.id === '1' || child.id === '2' || child.id === '0';
+
+          if (isSystemFolder && child.children) {
+            // 系统根文件夹：不显示文件夹名称，直接展开其内容
+            child.children.forEach(subChild => {
+              if (subChild.url) {
+                // 搜索过滤：只显示匹配的书签
+                if (this._matchesSearch(subChild)) {
+                  const item = this._renderBookmark(subChild);
+                  fragment.appendChild(item);
+                }
+              } else if (subChild.children && subChild.children.length > 0) {
+                // 子文件夹：递归渲染（内部会过滤）
+                const folderEl = this._renderFolder(subChild, 0);
+                // 只有文件夹内有匹配项时才添加
+                if (folderEl) fragment.appendChild(folderEl);
+              }
+            });
+          } else {
+            // 非系统文件夹：正常渲染
+            const folderEl = this._renderFolder(child, 0);
+            if (folderEl) fragment.appendChild(folderEl);
+          }
+        }
+      });
+    }
+
+    // 一次性清空并插入
+    this.tree.innerHTML = '';
+
+    // 搜索无结果时显示提示
+    if (fragment.childElementCount === 0 && this._searchKeyword) {
+      const empty = document.createElement('div');
+      empty.className = 'bookmarks-search-empty';
+      empty.textContent = '没有匹配的书签';
+      this.tree.appendChild(empty);
+    } else {
+      this.tree.appendChild(fragment);
+    }
+  }
+
+  /**
+   * 判断书签是否匹配当前搜索关键词
+   * @param {Object} bookmark - 书签数据
+   * @returns {boolean} 是否匹配
+   * @private
+   */
+  _matchesSearch(bookmark) {
+    // 无搜索关键词时全部匹配
+    if (!this._searchKeyword) return true;
+    // 匹配标题
+    const title = (bookmark.title || '').toLowerCase();
+    // 匹配URL
+    const url = (bookmark.url || '').toLowerCase();
+    return title.includes(this._searchKeyword) || url.includes(this._searchKeyword);
+  }
+
+  /**
+   * 判断文件夹内是否有匹配的书签
+   * @param {Object} folder - 文件夹节点
+   * @returns {boolean} 是否有匹配项
+   * @private
+   */
+  _folderHasMatch(folder) {
+    // 无搜索关键词时全部匹配
+    if (!this._searchKeyword) return true;
+    // 递归检查子节点
+    if (folder.children) {
+      for (const child of folder.children) {
+        if (child.url && this._matchesSearch(child)) return true;
+        if (child.children && this._folderHasMatch(child)) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * 渲染书签文件夹
    * @param {Object} folder - 书签文件夹节点
    * @param {number} depth - 嵌套深度
-   * @returns {HTMLElement} 文件夹DOM
+   * @returns {HTMLElement|null} 文件夹DOM，无匹配项时返回null
    * @private
    */
   _renderFolder(folder, depth) {
+    // 搜索模式下，文件夹内无匹配项则不渲染
+    if (!this._folderHasMatch(folder)) return null;
+
     const folderEl = document.createElement('div');
     folderEl.className = 'bookmark-folder';
 
@@ -151,7 +246,7 @@ class BookmarksComponent {
     arrow.className = 'folder-arrow';
     arrow.textContent = '▶';
 
-    // 文件夹图标 - 使用更精致的设计
+    // 文件夹图标
     const icon = document.createElement('span');
     icon.className = 'folder-icon';
     icon.textContent = '📂';
@@ -180,26 +275,33 @@ class BookmarksComponent {
     if (folder.children) {
       folder.children.forEach(child => {
         if (child.url) {
-          // 书签项
-          const item = this._renderBookmark(child);
-          childrenEl.appendChild(item);
+          // 搜索过滤：只显示匹配的书签
+          if (this._matchesSearch(child)) {
+            const item = this._renderBookmark(child);
+            childrenEl.appendChild(item);
+          }
         } else if (child.children) {
           // 子文件夹（递归渲染）
           const subFolder = this._renderFolder(child, depth + 1);
-          childrenEl.appendChild(subFolder);
+          if (subFolder) childrenEl.appendChild(subFolder);
         }
       });
+    }
+
+    // 搜索模式下自动展开包含匹配项的文件夹
+    const hasKeyword = !!this._searchKeyword;
+    if (hasKeyword) {
+      childrenEl.classList.add('expanded');
+      arrow.classList.add('expanded');
     }
 
     // 点击头部展开/折叠
     header.addEventListener('click', () => {
       const isExpanded = childrenEl.classList.contains('expanded');
       if (isExpanded) {
-        // 折叠
         childrenEl.classList.remove('expanded');
         arrow.classList.remove('expanded');
       } else {
-        // 展开
         childrenEl.classList.add('expanded');
         arrow.classList.add('expanded');
       }
@@ -208,15 +310,11 @@ class BookmarksComponent {
     folderEl.appendChild(header);
     folderEl.appendChild(childrenEl);
 
-    // 所有文件夹默认收起，用户点击手动展开
-    // 不再自动展开任何层级，保持页面简洁
-
     return folderEl;
   }
 
   /**
    * 渲染单个书签项
-   * 使用更精致的卡片式设计
    * @param {Object} bookmark - 书签数据
    * @returns {HTMLElement} 书签DOM
    * @private
@@ -229,16 +327,15 @@ class BookmarksComponent {
     const favicon = document.createElement('img');
     favicon.className = 'bookmark-favicon';
 
-    // 优先使用Chrome内置_favicon API获取图标（本地缓存，无网络请求）
+    // 优先使用Chrome内置_favicon API获取图标
     const faviconUrl = this._getFaviconUrl(bookmark.url);
     if (faviconUrl) {
       favicon.src = faviconUrl;
     } else {
-      // URL解析失败时使用默认图标
       favicon.src = this._getDefaultIcon();
     }
 
-    // favicon加载失败时显示默认图标（使用addEventListener避免CSP问题）
+    // favicon加载失败时显示默认图标
     favicon.addEventListener('error', () => {
       favicon.src = this._getDefaultIcon();
     });
@@ -300,11 +397,11 @@ class BookmarksComponent {
       <div class="modal-title">编辑书签</div>
       <div class="modal-field">
         <label>标题</label>
-        <input type="text" id="bm-title-input" value="${this._escapeHtml(bookmark.title || '')}">
+        <textarea id="bm-title-input" rows="2" placeholder="书签标题">${this._escapeHtml(bookmark.title || '')}</textarea>
       </div>
       <div class="modal-field">
         <label>网址</label>
-        <input type="url" id="bm-url-input" value="${this._escapeHtml(bookmark.url || '')}">
+        <textarea id="bm-url-input" rows="2" placeholder="https://example.com">${this._escapeHtml(bookmark.url || '')}</textarea>
       </div>
       <div class="modal-actions">
         <button class="modal-btn modal-btn-cancel" id="bm-cancel">取消</button>
@@ -315,20 +412,16 @@ class BookmarksComponent {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    // 取消
     document.getElementById('bm-cancel').addEventListener('click', () => overlay.remove());
-    // 点击遮罩关闭
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) overlay.remove();
     });
 
-    // 保存
     document.getElementById('bm-confirm').addEventListener('click', async () => {
       const newTitle = document.getElementById('bm-title-input').value.trim();
       const newUrl = document.getElementById('bm-url-input').value.trim();
 
       try {
-        // 调用Chrome API更新书签
         await chrome.bookmarks.update(bookmark.id, {
           title: newTitle || bookmark.title,
           url: newUrl || bookmark.url
@@ -336,7 +429,6 @@ class BookmarksComponent {
         this._loadBookmarks();
         overlay.remove();
       } catch (error) {
-        // 使用toast替代alert
         if (window.NewTabApp) {
           window.NewTabApp.showToast('更新失败: ' + error.message, 'error');
         }
@@ -346,23 +438,20 @@ class BookmarksComponent {
 
   /**
    * 删除书签
-   * 使用自定义确认弹窗替代原生confirm
    * @param {string} id - 书签ID
-   * @param {string} title - 书签标题（用于确认提示）
+   * @param {string} title - 书签标题
    * @private
    */
   async _deleteBookmark(id, title) {
-    // 使用自定义确认弹窗
     const confirmed = await window.NewTabApp.showConfirm(
       `确定删除书签"${title}"？`,
       { title: '删除书签', confirmText: '删除', type: 'danger' }
     );
-    if (!confirmed) return; // 用户取消
+    if (!confirmed) return;
     try {
       await chrome.bookmarks.remove(id);
       this._loadBookmarks();
     } catch (error) {
-      // 使用toast替代alert
       if (window.NewTabApp) {
         window.NewTabApp.showToast('删除失败: ' + error.message, 'error');
       }
@@ -384,11 +473,11 @@ class BookmarksComponent {
       <div class="modal-title">添加书签</div>
       <div class="modal-field">
         <label>标题</label>
-        <input type="text" id="bm-new-title" placeholder="书签标题">
+        <textarea id="bm-new-title" rows="2" placeholder="书签标题"></textarea>
       </div>
       <div class="modal-field">
         <label>网址</label>
-        <input type="url" id="bm-new-url" placeholder="https://example.com">
+        <textarea id="bm-new-url" rows="2" placeholder="https://example.com"></textarea>
       </div>
       <div class="modal-actions">
         <button class="modal-btn modal-btn-cancel" id="bm-new-cancel">取消</button>
@@ -416,16 +505,14 @@ class BookmarksComponent {
       }
 
       try {
-        // 添加到书签栏
         await chrome.bookmarks.create({
-          parentId: '1', // "1"是书签栏的ID
+          parentId: '1',
           title: title || url,
           url: url
         });
         this._loadBookmarks();
         overlay.remove();
       } catch (error) {
-        // 使用toast替代alert
         if (window.NewTabApp) {
           window.NewTabApp.showToast('添加失败: ' + error.message, 'error');
         }
@@ -435,19 +522,15 @@ class BookmarksComponent {
 
   /**
    * 获取网站favicon URL
-   * 优先使用Chrome内置_favicon API（本地缓存，无网络请求）
-   * 不可用时回退到Google favicon服务
    * @param {string} url - 完整URL
    * @returns {string|null} favicon URL
    * @private
    */
   _getFaviconUrl(url) {
-    // 优先使用Chrome内置API（通过全局NewTabApp）
     if (window.NewTabApp && window.NewTabApp.getFaviconUrl) {
       const faviconUrl = window.NewTabApp.getFaviconUrl(url, 16);
       if (faviconUrl) return faviconUrl;
     }
-    // 后备方案：使用Google favicon服务（比DuckDuckGo更稳定）
     try {
       const domain = new URL(url).hostname;
       return `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
@@ -457,12 +540,11 @@ class BookmarksComponent {
   }
 
   /**
-   * 获取默认书签图标（data URI，无需网络请求）
+   * 获取默认书签图标
    * @returns {string} 默认图标的data URI
    * @private
    */
   _getDefaultIcon() {
-    // 使用data URI避免额外的网络请求
     return 'data:image/svg+xml,' + encodeURIComponent(
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">' +
       '<rect width="16" height="16" rx="2" fill="rgba(255,255,255,0.15)"/>' +
@@ -487,6 +569,11 @@ class BookmarksComponent {
    * 销毁组件
    */
   destroy() {
+    // 清理搜索防抖定时器
+    if (this._searchTimer) {
+      clearTimeout(this._searchTimer);
+      this._searchTimer = null;
+    }
     if (this.el && this.el.parentNode) {
       this.el.parentNode.removeChild(this.el);
     }

@@ -388,6 +388,42 @@ class SettingsComponent {
         content.appendChild(dropdownTextRow);
       }
 
+      // ====== 快捷链接组件特有参数 ======
+      if (key === 'links') {
+        const linksGroupLabel = document.createElement('div');
+        linksGroupLabel.className = 'style-group-label';
+        linksGroupLabel.textContent = '其他';
+        content.appendChild(linksGroupLabel);
+
+        // 显示"新增链接"卡片开关
+        const showAddCardRow = document.createElement('div');
+        showAddCardRow.className = 'settings-row';
+        showAddCardRow.innerHTML = '<div class="settings-label">显示添加卡片</div>';
+        const showAddCardToggle = this._createToggle(style.showAddCard !== false, (val) => {
+          this._updateComponentStyle(key, 'showAddCard', val);
+        });
+        showAddCardRow.appendChild(showAddCardToggle);
+        content.appendChild(showAddCardRow);
+      }
+
+      // ====== 书签组件特有参数 ======
+      if (key === 'bookmarks') {
+        const bookmarksGroupLabel = document.createElement('div');
+        bookmarksGroupLabel.className = 'style-group-label';
+        bookmarksGroupLabel.textContent = '其他';
+        content.appendChild(bookmarksGroupLabel);
+
+        // 搜索功能开关
+        const showSearchRow = document.createElement('div');
+        showSearchRow.className = 'settings-row';
+        showSearchRow.innerHTML = '<div class="settings-label">显示搜索栏</div>';
+        const showSearchToggle = this._createToggle(style.showSearch !== false, (val) => {
+          this._updateComponentStyle(key, 'showSearch', val);
+        });
+        showSearchRow.appendChild(showSearchToggle);
+        content.appendChild(showSearchRow);
+      }
+
       // 重置此组件外观按钮（与上方参数保持间距）
       const resetBtn = document.createElement('button');
       resetBtn.className = 'settings-btn settings-btn-danger style-reset-btn';
@@ -443,6 +479,18 @@ class SettingsComponent {
     }
     this.config.components.style[componentKey][styleKey] = value;
     this.app.saveConfig();
+
+    // 快捷链接的showAddCard是功能性开关，需要重新渲染组件
+    if (componentKey === 'links' && styleKey === 'showAddCard') {
+      this.app.reloadComponent('links');
+      return;
+    }
+
+    // 书签的showSearch是功能性开关，需要重新渲染组件
+    if (componentKey === 'bookmarks' && styleKey === 'showSearch') {
+      this.app.reloadComponent('bookmarks');
+      return;
+    }
 
     // 实时应用样式到对应组件DOM
     const wrapper = document.querySelector(`[data-component="${componentKey}"]`);

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>书签WebDAV备份</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- 顶部标题栏 -->
+    <header class="header">
+      <h1>📚 书签备份</h1>
+      <span class="version">v1.0</span>
+    </header>
+
+    <!-- 状态信息区域 -->
+    <section class="status-section">
+      <div class="status-row">
+        <span class="status-label">备份状态</span>
+        <span id="backupStatus" class="status-value">检测中...</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">上次备份</span>
+        <span id="lastBackupTime" class="status-value">从未备份</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">上次恢复</span>
+        <span id="lastRestoreTime" class="status-value">从未恢复</span>
+      </div>
+    </section>
+
+    <!-- 操作按钮区域 -->
+    <section class="action-section">
+      <button id="btnBackup" class="btn btn-primary" disabled>
+        <span class="btn-icon">⬆️</span> 备份到WebDAV
+      </button>
+      <div class="restore-row">
+        <button id="btnRestore" class="btn btn-secondary" disabled>
+          <span class="btn-icon">⬇️</span> 从WebDAV恢复
+        </button>
+        <div class="version-select" id="versionSelect">
+          <label class="version-option">
+            <input type="radio" name="restoreVersion" value="v1" checked>
+            <span>最新(v1)</span>
+          </label>
+          <label class="version-option">
+            <input type="radio" name="restoreVersion" value="v2">
+            <span>历史(v2)</span>
+          </label>
+        </div>
+      </div>
+      <button id="btnTest" class="btn btn-outline" disabled>
+        <span class="btn-icon">🔗</span> 测试连接
+      </button>
+    </section>
+
+    <!-- 消息提示区域 -->
+    <div id="messageBox" class="message-box hidden"></div>
+
+    <!-- 确认弹窗（替代原生confirm） -->
+    <div id="confirmDialog" class="confirm-overlay hidden">
+      <div class="confirm-dialog">
+        <div class="confirm-icon">⚠️</div>
+        <div class="confirm-title" id="confirmTitle">确认操作</div>
+        <div class="confirm-message" id="confirmMessage">确定要继续吗？</div>
+        <div class="confirm-actions">
+          <button id="confirmCancel" class="btn btn-outline btn-small">取消</button>
+          <button id="confirmOk" class="btn btn-secondary btn-small">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 设置区域（可折叠） -->
+    <section class="settings-section">
+      <div class="settings-toggle" id="settingsToggle">
+        <span>⚙️ 设置</span>
+        <span class="toggle-arrow">▶</span>
+      </div>
+      <div class="settings-content" id="settingsContent">
+        <!-- WebDAV服务器配置 -->
+        <div class="form-group">
+          <label for="webdavUrl">WebDAV地址</label>
+          <input type="url" id="webdavUrl" placeholder="https://dav.example.com"
+                 autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="webdavUsername">用户名</label>
+          <input type="text" id="webdavUsername" placeholder="输入用户名"
+                 autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="webdavPassword">密码</label>
+          <input type="password" id="webdavPassword" placeholder="输入密码"
+                 autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="backupDir">备份目录</label>
+          <input type="text" id="backupDir" placeholder="/bookmark-backup"
+                 autocomplete="off">
+        </div>
+
+        <!-- 分隔线 -->
+        <div class="divider"></div>
+
+        <!-- 加密配置 -->
+        <div class="form-group">
+          <div class="checkbox-row">
+            <input type="checkbox" id="encryptionEnabled">
+            <label for="encryptionEnabled">启用加密（AES-256-GCM）</label>
+          </div>
+        </div>
+        <div class="form-group" id="encryptionPasswordGroup" style="display:none;">
+          <label for="encryptionPassword">加密密码</label>
+          <input type="password" id="encryptionPassword" placeholder="输入加密密码"
+                 autocomplete="new-password">
+          <small class="hint">请牢记此密码，丢失将无法恢复数据</small>
+        </div>
+
+        <!-- 保存设置按钮 -->
+        <button id="btnSaveSettings" class="btn btn-outline btn-small">
+          保存设置
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
